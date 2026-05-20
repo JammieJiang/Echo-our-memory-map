@@ -15,7 +15,7 @@ npm install
 npm run dev
 ```
 
-Open [https://echo-our-memory-map.vercel.app/). Login password: `0721`.
+Open [https://echo-our-memory-map.vercel.app/). Login in.
 
 ## Deploy
 
