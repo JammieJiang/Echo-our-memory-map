@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { MapPin, PenLine, LogOut, Footprints, Users, Building2, Sparkles, MessageCircle } from 'lucide-react';
 import LittleWorldPage from '@/components/LittleWorldPage';
@@ -16,7 +16,15 @@ import { EchoBackgroundBlobs, FloatingCloudDecorations } from '@/components/Echo
 import GlassBubble from '@/components/GlassBubble';
 import { useLocale } from '@/components/LocaleProvider';
 import { Echo } from '@/lib/types';
-import { MOCK_ECHOES, migrateEchoes } from '@/lib/mockData';
+import { MOCK_ECHOES } from '@/lib/mockData';
+import {
+  loadEchoesFromCloud,
+  loadEchoesLocal,
+  addEcho,
+  removeEcho,
+  pushLocalEchoesToCloud,
+} from '@/lib/echoStorage';
+import { isCloudEnabled } from '@/lib/cloud/client';
 
 type AppView =
   | 'hub'
@@ -39,30 +47,45 @@ export default function EchoApp({ onLogout }: EchoAppProps) {
   const [selectedEcho, setSelectedEcho] = useState<Echo | null>(null);
   const [showDetail, setShowDetail] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Echo | null>(null);
-
-  const persist = useCallback((list: Echo[]) => {
-    setEchoes(list);
-    localStorage.setItem('echoes', JSON.stringify(list));
-  }, []);
+  const [dataReady, setDataReady] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem('echoes');
-    if (saved) {
-      try {
-        persist(migrateEchoes(JSON.parse(saved)));
-      } catch {
-        console.error('Failed to load echoes');
+    let cancelled = false;
+    (async () => {
+      const local = loadEchoesLocal();
+      if (isCloudEnabled()) {
+        const cloud = await loadEchoesFromCloud();
+        if (!cancelled) {
+          if (cloud && cloud.length > 0) {
+            setEchoes(cloud);
+          } else if (local && local.length > 0) {
+            setEchoes(local);
+            await pushLocalEchoesToCloud(local);
+          } else {
+            setEchoes([]);
+          }
+          setDataReady(true);
+          return;
+        }
       }
-    }
-  }, [persist]);
+      if (!cancelled) {
+        setEchoes(local ?? MOCK_ECHOES);
+        setDataReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('isLoggedIn');
     onLogout();
   };
 
-  const handleAddEcho = (newEcho: Echo) => {
-    persist([...echoes, newEcho]);
+  const handleAddEcho = async (newEcho: Echo) => {
+    const next = await addEcho(newEcho, echoes);
+    setEchoes(next);
     setShowAddModal(false);
     setView('map');
   };
@@ -77,15 +100,24 @@ export default function EchoApp({ onLogout }: EchoAppProps) {
     setShowDetail(true);
   };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (!deleteTarget) return;
-    persist(echoes.filter((e) => e.id !== deleteTarget.id));
+    const next = await removeEcho(deleteTarget.id, echoes);
+    setEchoes(next);
     setDeleteTarget(null);
     if (selectedEcho?.id === deleteTarget.id) {
       setShowDetail(false);
       setSelectedEcho(null);
     }
   };
+
+  if (!dataReady) {
+    return (
+      <div className="relative flex h-screen items-center justify-center text-[14px] text-[#a8949c]">
+        …
+      </div>
+    );
+  }
 
   const cityCount = new Set(
     echoes.map((e) => e.placeName.split(/[·•]/)[0]?.trim()).filter(Boolean)

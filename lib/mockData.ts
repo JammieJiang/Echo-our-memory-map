@@ -1,4 +1,5 @@
 import { User, Echo } from './types';
+import { resolveImageUrl } from './cloud/client';
 
 export const USERS: User[] = [
   {
@@ -112,9 +113,10 @@ export function migrateEchoes(echoes: Echo[]): Echo[] {
   });
 }
 
-export function saveUserAvatar(userId: string, dataUrl: string) {
+export async function saveUserAvatar(userId: string, dataUrl: string) {
+  const url = (await resolveImageUrl(dataUrl)) ?? dataUrl;
   const stored = localStorage.getItem('userAvatars');
   const map = stored ? JSON.parse(stored) : {};
-  map[userId] = dataUrl;
+  map[userId] = url;
   localStorage.setItem('userAvatars', JSON.stringify(map));
 }

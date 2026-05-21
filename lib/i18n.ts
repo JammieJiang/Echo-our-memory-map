@@ -79,6 +79,8 @@ export const translations = {
     bbSend: '发出去',
     bbScreenshotLabel: '📷 截图证据',
     bbScreenshotPreview: '📷 留下证据',
+    cloudSaving: '正在上传到云端…',
+    cloudUploadFailed: '上传失败，请检查网络或云配置',
   },
   en: {
     appTitle: 'Echo Map',
@@ -158,6 +160,8 @@ export const translations = {
     bbSend: 'Send',
     bbScreenshotLabel: '📷 Screenshot proof',
     bbScreenshotPreview: '📷 Proof saved',
+    cloudSaving: 'Uploading to cloud…',
+    cloudUploadFailed: 'Upload failed — check network or cloud setup',
   },
 } as const;
 

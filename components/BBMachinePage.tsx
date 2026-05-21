@@ -8,7 +8,8 @@ import GlassBubble from '@/components/GlassBubble';
 import UserAvatar from '@/components/UserAvatar';
 import { BBPost } from '@/lib/types';
 import { getUsersWithStoredAvatars, USERS } from '@/lib/mockData';
-import { loadBBPosts, saveBBPosts, createBBPost } from '@/lib/postsStorage';
+import { loadBBPosts, addBBPost, createBBPost } from '@/lib/postsStorage';
+import { resolveImageUrl } from '@/lib/cloud/client';
 import { useLocale } from '@/components/LocaleProvider';
 
 const MAX_BYTES = 4 * 1024 * 1024;
@@ -26,17 +27,15 @@ export default function BBMachinePage({ onBack }: BBMachinePageProps) {
   const [text, setText] = useState('');
   const [screenshot, setScreenshot] = useState<string | null>(null);
   const [selected, setSelected] = useState<BBPost | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const users = getUsersWithStoredAvatars();
 
   useEffect(() => {
-    setPosts(loadBBPosts().sort((a, b) => b.timestamp - a.timestamp));
+    loadBBPosts().then((list) =>
+      setPosts(list.sort((a, b) => b.timestamp - a.timestamp))
+    );
   }, []);
-
-  const persist = (list: BBPost[]) => {
-    setPosts(list);
-    saveBBPosts(list);
-  };
 
   const handleFile = (file?: File) => {
     if (!file?.type.startsWith('image/')) return;
@@ -46,26 +45,36 @@ export default function BBMachinePage({ onBack }: BBMachinePageProps) {
     reader.readAsDataURL(file);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     const user = users.find((u) => u.id === userId) ?? users[0];
     if (mode === 'text' && !text.trim()) return;
     if (mode === 'screenshot' && !screenshot) return;
 
-    const post = createBBPost(
-      {
-        userId: user.id,
-        userName: user.name,
-        userAvatar: user.avatar,
-        type: mode,
-        text: mode === 'text' ? text.trim() : t('bbScreenshotLabel'),
-        screenshot: mode === 'screenshot' ? (screenshot ?? undefined) : undefined,
-      },
-      locale
-    );
-    persist([post, ...posts]);
-    setText('');
-    setScreenshot(null);
-    setShowCompose(false);
+    setSubmitting(true);
+    try {
+      let screenshotUrl: string | undefined;
+      if (mode === 'screenshot' && screenshot) {
+        screenshotUrl = await resolveImageUrl(screenshot);
+      }
+      const post = createBBPost(
+        {
+          userId: user.id,
+          userName: user.name,
+          userAvatar: user.avatar,
+          type: mode,
+          text: mode === 'text' ? text.trim() : t('bbScreenshotLabel'),
+          screenshot: screenshotUrl,
+        },
+        locale
+      );
+      await addBBPost(post);
+      setPosts((prev) => [post, ...prev].sort((a, b) => b.timestamp - a.timestamp));
+      setText('');
+      setScreenshot(null);
+      setShowCompose(false);
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const variantFor = (id: string) =>
@@ -220,10 +229,11 @@ export default function BBMachinePage({ onBack }: BBMachinePageProps) {
               <motion.button
                 type="button"
                 onClick={handleSubmit}
-                className="macaron-btn-blue w-full py-3 font-bold text-white"
+                disabled={submitting}
+                className="macaron-btn-blue w-full py-3 font-bold text-white disabled:opacity-50"
                 whileTap={{ scale: 0.95 }}
               >
-                {t('bbSend')}
+                {submitting ? t('cloudSaving') : t('bbSend')}
               </motion.button>
             </motion.div>
           </motion.div>

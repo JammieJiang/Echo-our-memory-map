@@ -6,11 +6,7 @@ import SubPageShell from '@/components/SubPageShell';
 import PostBubbleCard from '@/components/PostBubbleCard';
 import GlassBubble from '@/components/GlassBubble';
 import { LittleWorldPost } from '@/lib/types';
-import {
-  loadLittleWorld,
-  saveLittleWorld,
-  createLittleWorldPost,
-} from '@/lib/postsStorage';
+import { loadLittleWorld, addLittleWorldPost, createLittleWorldPost } from '@/lib/postsStorage';
 import { useLocale } from '@/components/LocaleProvider';
 
 interface LittleWorldPageProps {
@@ -25,17 +21,16 @@ export default function LittleWorldPage({ onBack }: LittleWorldPageProps) {
   const [selected, setSelected] = useState<LittleWorldPost | null>(null);
 
   useEffect(() => {
-    setPosts(loadLittleWorld().sort((a, b) => b.timestamp - a.timestamp));
+    loadLittleWorld().then((list) =>
+      setPosts(list.sort((a, b) => b.timestamp - a.timestamp))
+    );
   }, []);
 
-  const persist = (list: LittleWorldPost[]) => {
-    setPosts(list);
-    saveLittleWorld(list);
-  };
-
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!text.trim()) return;
-    persist([createLittleWorldPost(text, locale), ...posts]);
+    const post = createLittleWorldPost(text, locale);
+    await addLittleWorldPost(post);
+    setPosts((prev) => [post, ...prev].sort((a, b) => b.timestamp - a.timestamp));
     setText('');
     setShowCompose(false);
   };

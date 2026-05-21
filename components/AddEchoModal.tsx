@@ -12,10 +12,11 @@ import { formatEchoDate } from '@/lib/i18n';
 import UserAvatar from '@/components/UserAvatar';
 import GlassBubble, { GlassField } from '@/components/GlassBubble';
 import { useLocale } from '@/components/LocaleProvider';
+import { resolveImageUrl } from '@/lib/cloud/client';
 
 interface AddEchoModalProps {
   onClose: () => void;
-  onAdd: (echo: Echo) => void;
+  onAdd: (echo: Echo) => void | Promise<void>;
 }
 
 const MAX_PHOTO_BYTES = 4 * 1024 * 1024;
@@ -51,8 +52,8 @@ export default function AddEchoModal({ onClose, onAdd }: AddEchoModalProps) {
       return;
     }
     const reader = new FileReader();
-    reader.onload = () => {
-      saveUserAvatar(avatarEditUserId, reader.result as string);
+    reader.onload = async () => {
+      await saveUserAvatar(avatarEditUserId, reader.result as string);
       setUsers(getUsersWithStoredAvatars());
       setAvatarEditUserId(null);
     };
@@ -87,31 +88,40 @@ export default function AddEchoModal({ onClose, onAdd }: AddEchoModalProps) {
       return;
     }
     setSubmitting(true);
-    const coords = await resolveCoordinates(
-      placeName.trim(),
-      placeSelection
-        ? { lat: placeSelection.lat, lng: placeSelection.lng }
-        : undefined
-    );
-    setSubmitting(false);
-    if (!coords) {
-      setError(t('cityNotFound'));
-      return;
+    try {
+      const coords = await resolveCoordinates(
+        placeName.trim(),
+        placeSelection
+          ? { lat: placeSelection.lat, lng: placeSelection.lng }
+          : undefined
+      );
+      if (!coords) {
+        setError(t('cityNotFound'));
+        return;
+      }
+      let photoUrl: string | undefined;
+      if (photo) {
+        photoUrl = await resolveImageUrl(photo);
+      }
+      const dateObj = new Date(`${echoDate}T12:00:00`);
+      await onAdd({
+        id: Date.now().toString(),
+        userId,
+        userName: selectedUser.name,
+        userAvatar: selectedUser.avatar,
+        latitude: coords.lat,
+        longitude: coords.lng,
+        placeName: placeName.trim(),
+        description: description.trim(),
+        photos: photoUrl ? [photoUrl] : [],
+        timestamp: dateObj.getTime(),
+        createdAt: formatEchoDate(dateObj.getTime(), locale),
+      });
+    } catch {
+      setError(t('cloudUploadFailed'));
+    } finally {
+      setSubmitting(false);
     }
-    const dateObj = new Date(`${echoDate}T12:00:00`);
-    onAdd({
-      id: Date.now().toString(),
-      userId,
-      userName: selectedUser.name,
-      userAvatar: selectedUser.avatar,
-      latitude: coords.lat,
-      longitude: coords.lng,
-      placeName: placeName.trim(),
-      description: description.trim(),
-      photos: photo ? [photo] : [],
-      timestamp: dateObj.getTime(),
-      createdAt: formatEchoDate(dateObj.getTime(), locale),
-    });
   };
 
   const inputClass =
@@ -276,7 +286,7 @@ export default function AddEchoModal({ onClose, onAdd }: AddEchoModalProps) {
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
           >
-            {submitting ? t('findingCity') : t('sendEcho')}
+            {submitting ? t('cloudSaving') : t('sendEcho')}
           </motion.button>
         </form>
       </motion.div>
