@@ -16,7 +16,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000). Login password: `0721`.
+Open [https://echo-our-memory-map.vercel.app/). Login in.
 
 ## 三人云存储（Supabase）
 
